@@ -55,21 +55,22 @@ Use a checklist to summarize granular steps. Every stopping point must be docume
 even if it requires splitting a partially completed task into two ("done" vs. "remaining").
 This section must always reflect the actual current state of the work.
 
-- [ ] **M1** — Enter the dev shell and confirm the toolchain (GHC 9.12.4, cabal) and that
-      `openapi-hs` resolves from the `cabal.project` git pin.
-- [ ] **M1** — `cabal build lib:servant-openapi` compiles the library against `openapi-hs`
-      under the new `default-language: GHC2024`; fix any compile errors arising from 3.0→3.1
-      API removals or from `GHC2024` inference changes (see Context).
-- [ ] **M2** — `cabal build` compiles the `spec` test suite (test-only deps resolve).
-- [ ] **M2** — Update test fixtures in `test/Servant/OpenApiSpec.hs`: change every
-      `"openapi": "3.0.0"` to `"3.1.0"` and reconcile any other data-model differences the
-      runner reports.
-- [ ] **M2** — Add Layer-1 validation: a `hspec` example asserting
-      `eitherDecode (encode spec) == Right spec` for each generated document (round-trips
-      through `openapi-hs`, whose decoder enforces the 3.1.x version bound).
-- [ ] **M2** — Add Layer-2 validation: exercise `Servant.OpenApi.Test.validateEveryToJSON`
-      over a sample API so generated schemas are checked against generated data.
-- [ ] **M2** — `cabal test spec` passes (0 failures).
+- [x] **M1** — Enter the dev shell and confirm the toolchain (GHC 9.12.4, cabal 3.16.1.0) and
+      that `openapi-hs` resolves from the `cabal.project` git pin. ✅
+- [x] **M1** — `cabal build lib:servant-openapi` compiles the library against `openapi-hs`
+      under `default-language: GHC2024`. One source edit needed (`OpenApiTypeSingle`, see
+      Surprises). ✅
+- [x] **M2** — `cabal build` compiles the `spec` test suite (test-only deps resolve). Two more
+      library edits needed for new 3.1 record fields (`_openApiWebhooks`, `_pathItemRef`). ✅
+- [x] **M2** — Update test fixtures in `test/Servant/OpenApiSpec.hs`: changed all four
+      `"openapi": "3.0.0"` to `"3.1.0"`. No other fixture changes were required — the derived
+      data model is otherwise identical. ✅
+- [x] **M2** — Added Layer-1 validation: a `roundTrips` `hspec` example per generated document
+      decodes through `openapi-hs`'s version-enforcing `FromJSON OpenApi` and compares at the
+      aeson `Value` level (see Surprises for why not `== Right spec`). ✅
+- [x] **M2** — Added Layer-2 validation: `validateEveryToJSON (Proxy :: Proxy ValidationAPI)`
+      over a sample `Health` API with `Arbitrary`/`ToJSON`/`ToSchema` instances (100 cases). ✅
+- [x] **M2** — `cabal test spec` passes — 11 examples, 0 failures. ✅
 - [ ] **M3** — Add an `exe:gen-openapi` component that emits a representative API's document as
       JSON to stdout (`app/GenOpenApi.hs`).
 - [ ] **M3** — Layer-3 validation: `cabal run gen-openapi > openapi.json` then
@@ -85,7 +86,46 @@ This section must always reflect the actual current state of the work.
 Document unexpected behaviors, bugs, optimizations, or insights discovered during
 implementation. Provide concise evidence.
 
-(None yet.)
+- **`type_` now takes `OpenApiTypeValue`, not `OpenApiType` (M1).** The one library use of the
+  3.0→3.1 type-array change predicted in Context surfaced at
+  `src/Servant/OpenApi/Internal.hs:362`. `type_ ?~ OpenApiArray` no longer typechecks because
+  `_schemaType :: Maybe OpenApiTypeValue`. Fixed to `type_ ?~ OpenApiTypeSingle OpenApiArray`,
+  matching how `openapi-hs` itself sets the field (e.g. `Data/OpenApi/Internal/ParamSchema.hs`).
+
+- **Two new 3.1 record fields broke explicit record construction (M2).** The library's
+  `combineSwagger`/`combinePathItem` helpers build `OpenApi`/`PathItem` with explicit field
+  lists, so new fields are a compile-or-runtime break, not silently defaulted. OpenAPI 3.1 added
+  two fields that `openapi-hs` carries:
+  - `OpenApi` gained `_openApiWebhooks :: InsOrdHashMap Text (Referenced PathItem)`. Missing it
+    produced `RecConError ... Missing field in record construction _openApiWebhooks` at runtime
+    (the UVerb test). Added `_openApiWebhooks = _openApiWebhooks s <> _openApiWebhooks t`
+    (monoidal union, matching the generic `Semigroup OpenApi`).
+  - `PathItem` gained `_pathItemRef :: Maybe Text` (3.1 allows `$ref` in a Path Item). Missing
+    it produced `RecConError ... _pathItemRef`. Added
+    `_pathItemRef = _pathItemRef s <|> _pathItemRef t` (left-biased, matching the sibling
+    `Maybe` fields `_pathItemSummary`/`_pathItemDescription`).
+  Evidence: both surfaced as `uncaught exception: RecConError` in `cabal test spec`, fixed
+  one-by-one until all 5 fixture tests passed.
+
+- **No fixture data changes beyond the version string (M2).** The `Maybe`-field nullability
+  concern raised in Context did not materialize: a Haskell `Maybe` field still only makes a
+  property optional (absent from `required`), it does not emit `"type": ["…","null"]`. With the
+  four `"3.0.0"` → `"3.1.0"` edits, all five fixture comparisons passed unchanged.
+
+- **Layer 1 cannot use `decoded == Right spec` (M2).** Two independent quirks make structural
+  `Eq`/byte equality the wrong round-trip oracle, even though the document is valid and
+  semantically unchanged:
+  1. `InsOrdHashSet`'s `Eq` (insert-ordered-containers; used for `tags`/`operationTags`) is
+     sensitive to an internal index counter that a JSON round-trip does not reconstruct. Proven
+     in the repl: for `getPostOpenApi`, `s ^. tags == d ^. tags` is `False` while
+     `toList (s ^. tags) == toList (d ^. tags)` is `True`.
+  2. aeson decodes JSON objects into an order-insensitive `KeyMap`, so re-encoded bytes differ
+     in key order (e.g. `components.schemas` keys reordered) from the original even when the
+     documents are identical.
+  Resolution: assert at the aeson `Value` level — `toJSON d == toJSON s`. `Value` equality is
+  order-insensitive for objects but order-sensitive for arrays (`required`, `enum`, tag lists),
+  so it is the precise semantic-equality oracle, and it still forces a decode through
+  `openapi-hs`'s version-enforcing `FromJSON OpenApi`. Result: 11 examples, 0 failures.
 
 
 ## Decision Log
@@ -147,6 +187,17 @@ Record every decision made while working on the plan.
   and CI-friendly (`cabal run gen-openapi > openapi.json`) and avoids entangling the unit tests
   with file IO. It also partly restores the usage example that the `example/` directory
   provided before it was removed in the fork.
+  Date: 2026-06-17
+
+- Decision: Implement Layer-1 round-trip as `toJSON (decode (encode spec)) == toJSON spec`
+  (aeson `Value` equality) rather than the originally-planned `decode (encode spec) == Right
+  spec`.
+  Rationale: Discovered during M2 that `== Right spec` fails for valid, semantically-identical
+  documents because (1) `InsOrdHashSet`'s `Eq` distinguishes index state a JSON round-trip drops
+  and (2) aeson's `KeyMap` does not preserve object key order. `Value` equality is the precise
+  oracle: object-key-order-insensitive, array-order-sensitive, and still routes through
+  `openapi-hs`'s version-enforcing decoder (a wrong version → `Left` → `expectationFailure`). See
+  Surprises & Discoveries for the repl evidence. This strengthens, not weakens, the assertion.
   Date: 2026-06-17
 
 - Decision: Renumber milestones after inserting validation work: M3 = external (vacuum)

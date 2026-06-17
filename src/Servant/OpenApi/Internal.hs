@@ -213,7 +213,8 @@ instance
       -- workaround for https://github.com/GetShopTV/swagger2/issues/218
       combinePathItem :: PathItem -> PathItem -> PathItem
       combinePathItem s t = PathItem
-        { _pathItemGet = _pathItemGet s <> _pathItemGet t
+        { _pathItemRef = _pathItemRef s <|> _pathItemRef t
+        , _pathItemGet = _pathItemGet s <> _pathItemGet t
         , _pathItemPut = _pathItemPut s <> _pathItemPut t
         , _pathItemPost = _pathItemPost s <> _pathItemPost t
         , _pathItemDelete = _pathItemDelete s <> _pathItemDelete t
@@ -233,6 +234,7 @@ instance
         , _openApiInfo = _openApiInfo s <> _openApiInfo t
         , _openApiServers = _openApiServers s <> _openApiServers t
         , _openApiPaths = InsOrdHashMap.unionWith combinePathItem (_openApiPaths s) (_openApiPaths t)
+        , _openApiWebhooks = _openApiWebhooks s <> _openApiWebhooks t
         , _openApiComponents = _openApiComponents s <> _openApiComponents t
         , _openApiSecurity = _openApiSecurity s <> _openApiSecurity t
         , _openApiTags = _openApiTags s <> _openApiTags t
@@ -359,7 +361,7 @@ instance (KnownSymbol sym, ToParamSchema a, HasOpenApi sub) => HasOpenApi (Query
         & in_ .~ ParamQuery
         & schema ?~ Inline pschema
       pschema = mempty
-        & type_ ?~ OpenApiArray
+        & type_ ?~ OpenApiTypeSingle OpenApiArray
         & items ?~ OpenApiItemsObject (Inline $ toParamSchema (Proxy :: Proxy a))
 
 instance (KnownSymbol sym, HasOpenApi sub) => HasOpenApi (QueryFlag sym :> sub) where

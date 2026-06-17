@@ -12,7 +12,7 @@
 module Servant.OpenApiSpec where
 
 import           Control.Lens
-import           Data.Aeson                    (ToJSON (toJSON), Value, encode, genericToJSON)
+import           Data.Aeson                    (ToJSON (toJSON), Value, eitherDecode, encode, genericToJSON)
 import           Data.Aeson.QQ.Simple
 import qualified Data.Aeson.Types              as JSON
 import           Data.Char                     (toLower)
@@ -21,11 +21,14 @@ import           Data.OpenApi
 import           Data.Proxy
 import           Data.Text                     (Text)
 import           Data.Time
+import           Data.Typeable                 (Typeable)
 import           GHC.Generics
 import           Servant.API
 import           Servant.OpenApi
+import           Servant.OpenApi.Test          (validateEveryToJSON)
 import           Servant.Test.ComprehensiveAPI (comprehensiveAPI)
 import           Test.Hspec                    hiding (example)
+import           Test.QuickCheck               (Arbitrary (..))
 
 checkAPI :: HasCallStack => HasOpenApi api => Proxy api -> Value -> IO ()
 checkAPI proxy = checkOpenApi (toOpenApi proxy)
@@ -34,19 +37,78 @@ checkOpenApi :: HasCallStack => OpenApi -> Value -> IO ()
 checkOpenApi swag js = encode (toJSON swag) `shouldBe` (encode js)
 
 spec :: Spec
-spec = describe "HasOpenApi" $ do
-  it "Todo API" $ checkAPI (Proxy :: Proxy TodoAPI) todoAPI
-  it "Hackage API (with tags)" $ checkOpenApi hackageOpenApiWithTags hackageAPI
-  it "GetPost API (test subOperations)" $ checkOpenApi getPostOpenApi getPostAPI
-  it "Comprehensive API" $ do
-    let _x = toOpenApi comprehensiveAPI
-    True `shouldBe` True -- type-level test
+spec = do
+  describe "HasOpenApi" $ do
+    it "Todo API" $ checkAPI (Proxy :: Proxy TodoAPI) todoAPI
+    it "Hackage API (with tags)" $ checkOpenApi hackageOpenApiWithTags hackageAPI
+    it "GetPost API (test subOperations)" $ checkOpenApi getPostOpenApi getPostAPI
+    it "Comprehensive API" $ do
+      let _x = toOpenApi comprehensiveAPI
+      True `shouldBe` True -- type-level test
 #if MIN_VERSION_servant(0,18,1)
-  it "UVerb API" $ checkOpenApi uverbOpenApi uverbAPI
+    it "UVerb API" $ checkOpenApi uverbOpenApi uverbAPI
 #endif
+
+  -- Layer 1: every generated document round-trips through openapi-hs's
+  -- 'FromJSON OpenApi', which rejects any version outside 3.1.0 .. 3.1.1.
+  -- A successful @eitherDecode (encode spec) == Right spec@ therefore proves
+  -- the emitted JSON is a structurally valid OpenAPI 3.1 document.
+  describe "round-trips through openapi-hs (valid OpenAPI 3.1)" $ do
+    it "Todo API" $ roundTrips (toOpenApi (Proxy :: Proxy TodoAPI))
+    it "Hackage API" $ roundTrips hackageOpenApiWithTags
+    it "GetPost API" $ roundTrips getPostOpenApi
+    it "Comprehensive API" $ roundTrips (toOpenApi comprehensiveAPI)
+#if MIN_VERSION_servant(0,18,1)
+    it "UVerb API" $ roundTrips uverbOpenApi
+#endif
+
+  -- Layer 2: generated random values of each JSON body type are validated
+  -- against the *generated* schema, proving the schemas describe the data.
+  describe "validateEveryToJSON (schemas describe their data)" $
+    validateEveryToJSON (Proxy :: Proxy ValidationAPI)
+
+-- | Layer 1 assertion: a document survives a parse by openapi-hs's
+-- @FromJSON OpenApi@ — which rejects any version outside 3.1.0 .. 3.1.1 — and
+-- re-serializes to a semantically identical JSON document, proving it is a
+-- structurally valid, correctly-versioned OpenAPI 3.1 document.
+--
+-- The comparison is at the aeson 'Value' level rather than on @OpenApi@ values
+-- or raw bytes, for two reasons:
+--
+--   * @Eq@ for @InsOrdHashSet@ (used by @tags@ / @operationTags@) is sensitive
+--     to an internal index counter that a JSON round-trip does not preserve, so
+--     @decoded == Right s@ fails for semantically identical documents.
+--   * aeson decodes JSON objects into an order-insensitive @KeyMap@, so the
+--     re-encoded bytes differ in key order from the original even when the
+--     documents are identical.
+--
+-- Comparing 'Value's sidesteps both: object key order is irrelevant to 'Value'
+-- equality while array order (e.g. @required@, @enum@) still is.
+roundTrips :: HasCallStack => OpenApi -> Expectation
+roundTrips s = case eitherDecode (encode s) :: Either String OpenApi of
+  Left err -> expectationFailure ("did not decode as OpenAPI 3.1: " ++ err)
+  Right d  -> toJSON d `shouldBe` toJSON s
 
 main :: IO ()
 main = hspec spec
+
+-- =======================================================================
+-- Validation API (Layer 2)
+-- =======================================================================
+
+data Health = Health
+  { status :: String
+  , uptime :: Int
+  } deriving (Eq, Show, Generic, Typeable)
+
+instance ToJSON Health
+instance ToSchema Health
+instance Arbitrary Health where
+  arbitrary = Health <$> arbitrary <*> arbitrary
+
+type ValidationAPI =
+       "health" :> Get '[JSON] Health
+  :<|> "health" :> ReqBody '[JSON] Health :> Post '[JSON] Health
 
 -- =======================================================================
 -- Todo API
@@ -69,7 +131,7 @@ type TodoAPI = "todo" :> Capture "id" TodoId :> Get '[JSON] Todo
 todoAPI :: Value
 todoAPI = [aesonQQ|
 {
-  "openapi": "3.0.0",
+  "openapi": "3.1.0",
   "info": {
     "version": "",
     "title": ""
@@ -195,7 +257,7 @@ hackageOpenApiWithTags = toOpenApi (Proxy :: Proxy HackageAPI)
 hackageAPI :: Value
 hackageAPI = [aesonQQ|
 {
-  "openapi": "3.0.0",
+  "openapi": "3.1.0",
   "servers": [
     {
       "url": "https://hackage.haskell.org"
@@ -376,7 +438,7 @@ getPostAPI :: Value
 getPostAPI = [aesonQQ|
 {
   "components": {},
-  "openapi": "3.0.0",
+  "openapi": "3.1.0",
   "info": {
     "version": "",
     "title": ""
@@ -453,7 +515,7 @@ uverbOpenApi = toOpenApi (Proxy :: Proxy UVerbAPI)
 uverbAPI :: Value
 uverbAPI = [aesonQQ|
 {
-  "openapi": "3.0.0",
+  "openapi": "3.1.0",
   "info": {
     "version": "",
     "title": ""
