@@ -175,7 +175,7 @@ props _ f px = sequence_ specs
 -- }
 -- <BLANKLINE>
 --
--- FIXME: this belongs in "Data.OpenApi.Schema.Validation" (in @swagger2@).
+-- FIXME: this belongs in "Data.OpenApi.Schema.Validation" (in @openapi-hs@).
 prettyValidateWith
   :: forall a. (ToJSON a, ToSchema a)
   => (a -> [ValidationError]) -> a -> Maybe String

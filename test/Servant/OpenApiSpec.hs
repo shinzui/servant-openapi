@@ -32,7 +32,7 @@ checkAPI :: HasCallStack => HasOpenApi api => Proxy api -> Value -> IO ()
 checkAPI proxy = checkOpenApi (toOpenApi proxy)
 
 checkOpenApi :: HasCallStack => OpenApi -> Value -> IO ()
-checkOpenApi swag js = encode (toJSON swag) `shouldBe` (encode js)
+checkOpenApi openApi js = encode (toJSON openApi) `shouldBe` (encode js)
 
 spec :: Spec
 spec = do

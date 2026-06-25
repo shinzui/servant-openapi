@@ -96,7 +96,7 @@ implementation. Provide concise evidence.
   matching how `openapi-hs` itself sets the field (e.g. `Data/OpenApi/Internal/ParamSchema.hs`).
 
 - **Two new 3.1 record fields broke explicit record construction (M2).** The library's
-  `combineSwagger`/`combinePathItem` helpers build `OpenApi`/`PathItem` with explicit field
+  `combineOpenApi`/`combinePathItem` helpers build `OpenApi`/`PathItem` with explicit field
   lists, so new fields are a compile-or-runtime break, not silently defaulted. OpenAPI 3.1 added
   two fields that `openapi-hs` carries:
   - `OpenApi` gained `_openApiWebhooks :: InsOrdHashMap Text (Referenced PathItem)`. Missing it

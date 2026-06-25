@@ -515,15 +515,13 @@ import           Servant.OpenApi.Internal.Orphans ()
 -- ...3 examples, 0 failures...
 --
 -- Although servant is great, chances are that your API clients don't use Haskell.
--- In many cases @swagger.json@ serves as a specification, not a Haskell type.
+-- In many cases @openapi.json@ serves as a specification, not a Haskell type.
 --
--- In this cases it is a good idea to store generated and annotated @OpenApi@ in a @swagger.json@ file
+-- In this cases it is a good idea to store generated and annotated @OpenApi@ in an @openapi.json@ file
 -- under a version control system (such as Git, Subversion, Mercurial, etc.).
 --
--- It is also recommended to version API based on changes to the @swagger.json@ rather than changes
+-- It is also recommended to version API based on changes to the @openapi.json@ rather than changes
 -- to the Haskell API.
---
--- See <example/test/TodoSpec.hs TodoSpec.hs> for an example of a complete test suite for a swagger specification.
 
 -- $serve
 -- If you're implementing a server for an API, you might also want to serve its @OpenApi@ specification.

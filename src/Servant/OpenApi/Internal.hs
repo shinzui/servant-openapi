@@ -208,9 +208,11 @@ instance
   where
   toOpenApi _ =
     toOpenApi (Proxy :: Proxy (Verb method (StatusOf a) cs a))
-      `combineSwagger` toOpenApi (Proxy :: Proxy (UVerb method cs as))
+      `combineOpenApi` toOpenApi (Proxy :: Proxy (UVerb method cs as))
     where
-      -- workaround for https://github.com/GetShopTV/swagger2/issues/218
+      -- The derived 'Semigroup' on 'OpenApi'/'PathItem' is left-biased and would
+      -- drop one of a UVerb member's responses sharing a path and method, so the
+      -- two documents are merged field-by-field instead.
       combinePathItem :: PathItem -> PathItem -> PathItem
       combinePathItem s t = PathItem
         { _pathItemRef = _pathItemRef s <|> _pathItemRef t
@@ -228,8 +230,8 @@ instance
         , _pathItemServers = _pathItemServers s <> _pathItemServers t
         }
 
-      combineSwagger :: OpenApi -> OpenApi -> OpenApi
-      combineSwagger s t = OpenApi
+      combineOpenApi :: OpenApi -> OpenApi -> OpenApi
+      combineOpenApi s t = OpenApi
         { _openApiOpenapi = _openApiOpenapi s <> _openApiOpenapi t
         , _openApiInfo = _openApiInfo s <> _openApiInfo t
         , _openApiServers = _openApiServers s <> _openApiServers t

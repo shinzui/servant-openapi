@@ -28,9 +28,9 @@ to test that handlers conform to the generated schema.
 
 A generated specification can then be used to
 
-- display interactive documentation with [Swagger UI](http://swagger.io/swagger-ui/);
+- display interactive documentation in any OpenAPI 3.1 viewer;
 - generate clients and servers in many languages with [OpenAPI Generator](https://openapi-generator.tech/);
-- and [many other things](http://swagger.io/open-source-integrations/).
+- and many other things across the OpenAPI tooling ecosystem.
 
 ## Installation
 
@@ -95,9 +95,8 @@ cabal run gen-openapi > openapi.json
 
 The full API surface is unchanged from upstream; see the
 [Haddock documentation](https://hackage.haskell.org/package/servant-openapi).
-Generated specifications can be explored interactively in the
-[Swagger Editor](https://editor.swagger.io/) and served via
-[Swagger UI](https://github.com/swagger-api/swagger-ui).
+Generated specifications can be explored interactively in any OpenAPI 3.1
+viewer or editor.
 
 ## Validation
 

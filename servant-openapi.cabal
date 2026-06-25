@@ -10,11 +10,11 @@ description:
   .
   A generated specification can be used for many things, such as
   .
-  * displaying interactive documentation using [Swagger UI](http://swagger.io/swagger-ui/);
+  * displaying interactive documentation in any OpenAPI 3.1 viewer;
   .
   * generating clients and servers in many languages using [OpenAPI Generator](https://openapi-generator.tech/);
   .
-  * and [many others](http://swagger.io/open-source-integrations/).
+  * and many others across the OpenAPI tooling ecosystem.
   .
   This package is a fork of
   [@servant-openapi3@](https://github.com/biocad/servant-openapi3) that targets
